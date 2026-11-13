@@ -34,8 +34,10 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+  uses: android-actions/setup-android@v4
+  with:
+    packages: 'platform-tools'
+    
       - name: Install Android NDK
         run: |
           sdkmanager --install "platforms;android-37" "ndk;29.0.14206865"
