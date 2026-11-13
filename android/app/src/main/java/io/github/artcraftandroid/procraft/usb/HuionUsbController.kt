@@ -1,3 +1,4 @@
+
 package io.github.artcraftandroid.procraft.usb
 
 import android.app.PendingIntent
@@ -15,16 +16,21 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 
-/** First-stage Huion USB bridge. It deliberately does not change tablet state yet. */
+/** First-stage Huion USB bridge for HC16. */
 class HuionUsbController(private val context: Context) {
+
     companion object {
         private const val TAG = "ProCraft-Huion"
-        private const val ACTION_PERMISSION = "io.github.artcraftandroid.procraft.HUION_USB_PERMISSION"
-        private const val HUION_VID = 0x256c
-        private const val HS610_PID = 0x006d
+        private const val ACTION_PERMISSION =
+            "io.github.artcraftandroid.procraft.HUION_USB_PERMISSION"
+
+        private const val HUION_VID = 0x256C
+        private const val HC16_PID = 0x0BBA
     }
 
-    private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+    private val usbManager =
+        context.getSystemService(Context.USB_SERVICE) as UsbManager
+
     private var connection: UsbDeviceConnection? = null
     private var claimedInterface: UsbInterface? = null
     private var registered = false
@@ -32,16 +38,32 @@ class HuionUsbController(private val context: Context) {
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
             if (intent.action != ACTION_PERMISSION) return
+
             val device = if (Build.VERSION.SDK_INT >= 33) {
-                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                intent.getParcelableExtra(
+                    UsbManager.EXTRA_DEVICE,
+                    UsbDevice::class.java
+                )
             } else {
                 @Suppress("DEPRECATION")
                 intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
             }
-            if (device != null && intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+
+            if (device != null &&
+                intent.getBooleanExtra(
+                    UsbManager.EXTRA_PERMISSION_GRANTED,
+                    false
+                )
+            ) {
+                Log.i(TAG, "HC16 USB permission granted")
                 open(device)
             } else if (device != null) {
-                Log.w(TAG, "USB permission denied: ${device.deviceName}")
+                Log.w(TAG, "HC16 USB permission denied")
+                Toast.makeText(
+                    context,
+                    "Autorisation USB refusée",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
@@ -49,76 +71,150 @@ class HuionUsbController(private val context: Context) {
     fun start() {
         if (!registered) {
             val filter = IntentFilter(ACTION_PERMISSION)
+
             if (Build.VERSION.SDK_INT >= 33) {
-                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                context.registerReceiver(
+                    receiver,
+                    filter,
+                    Context.RECEIVER_NOT_EXPORTED
+                )
             } else {
                 @Suppress("DEPRECATION")
                 ContextCompat.registerReceiver(
-    context,
-    receiver,
-    filter,
-    ContextCompat.RECEIVER_NOT_EXPORTED
-)
+                    context,
+                    receiver,
+                    filter,
+                    ContextCompat.RECEIVER_NOT_EXPORTED
+                )
             }
+
             registered = true
         }
 
-        usbManager.deviceList.values.firstOrNull(::isHs610)?.let { device ->
-            if (usbManager.hasPermission(device)) open(device)
-            else requestPermission(device)
+        val device = usbManager.deviceList.values
+            .firstOrNull(::isHC16)
+
+        if (device != null) {
+            Log.i(
+                TAG,
+                "HC16 detected: VID=%04X PID=%04X".format(
+                    device.vendorId,
+                    device.productId
+                )
+            )
+
+            if (usbManager.hasPermission(device)) {
+                open(device)
+            } else {
+                requestPermission(device)
+            }
+        } else {
+            Log.i(TAG, "HC16 not found among connected USB devices")
         }
     }
 
     fun stop() {
-        claimedInterface?.let { connection?.releaseInterface(it) }
-        claimedInterface = null
-        connection?.close()
-        connection = null
+        stopConnectionOnly()
+
         if (registered) {
             context.unregisterReceiver(receiver)
             registered = false
         }
     }
 
-    private fun isHs610(device: UsbDevice): Boolean =
-        device.vendorId == HUION_VID && device.productId == HS610_PID
+    private fun isHC16(device: UsbDevice): Boolean {
+        return device.vendorId == HUION_VID &&
+            device.productId == HC16_PID
+    }
 
     private fun requestPermission(device: UsbDevice) {
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        val pi = PendingIntent.getBroadcast(context, 0, Intent(ACTION_PERMISSION).setPackage(context.packageName), flags)
-        Log.i(TAG, "HS610 detected: requesting USB permission")
+        val flags =
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                PendingIntent.FLAG_IMMUTABLE
+
+        val pi = PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent(ACTION_PERMISSION).setPackage(context.packageName),
+            flags
+        )
+
+        Log.i(TAG, "Requesting HC16 USB permission")
+
+        Toast.makeText(
+            context,
+            "Huion HC16 détectée — demande d'autorisation",
+            Toast.LENGTH_SHORT
+        ).show()
+
         usbManager.requestPermission(device, pi)
     }
 
     private fun open(device: UsbDevice) {
         stopConnectionOnly()
+
         val candidate = (0 until device.interfaceCount)
             .map { device.getInterface(it) }
             .firstOrNull { intf ->
-                intf.interfaceClass == UsbConstants.USB_CLASS_HID || intf.endpointCount > 0
+                intf.interfaceClass == UsbConstants.USB_CLASS_HID ||
+                    intf.endpointCount > 0
             } ?: run {
-                Log.w(TAG, "HS610 has no usable USB interface")
+                Log.w(TAG, "HC16 has no usable USB interface")
+                Toast.makeText(
+                    context,
+                    "HC16 détectée, interface USB introuvable",
+                    Toast.LENGTH_LONG
+                ).show()
                 return
             }
 
         val conn = usbManager.openDevice(device) ?: run {
-            Log.e(TAG, "Could not open HS610")
+            Log.e(TAG, "Could not open HC16")
+            Toast.makeText(
+                context,
+                "Impossible d'ouvrir la HC16",
+                Toast.LENGTH_LONG
+            ).show()
             return
         }
+
         if (!conn.claimInterface(candidate, true)) {
-            Log.e(TAG, "Could not claim HS610 interface ${candidate.id}")
+            Log.e(TAG, "Could not claim HC16 interface ${candidate.id}")
             conn.close()
+            Toast.makeText(
+                context,
+                "Impossible d'accéder à l'interface HC16",
+                Toast.LENGTH_LONG
+            ).show()
             return
         }
 
         connection = conn
         claimedInterface = candidate
-        Log.i(TAG, "HS610 USB opened: VID=%04x PID=%04x interface=%d endpoints=%d".format(device.vendorId, device.productId, candidate.id, candidate.endpointCount))
-        Toast.makeText(context, "HS610 USB détectée — ProCraft", Toast.LENGTH_SHORT).show()
+
+        Log.i(
+            TAG,
+            "HC16 USB opened: VID=%04X PID=%04X interface=%d endpoints=%d"
+                .format(
+                    device.vendorId,
+                    device.productId,
+                    candidate.id,
+                    candidate.endpointCount
+                )
+        )
+
+        Toast.makeText(
+            context,
+            "Huion HC16 détectée et connectée à ProCraft",
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun stopConnectionOnly() {
-        claimedInterface?.let { connection?.releaseInterface(it) }
+        claimedInterface?.let {
+            connection?.releaseInterface(it)
+        }
+
         claimedInterface = null
         connection?.close()
         connection = null
