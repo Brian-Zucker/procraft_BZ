@@ -13,6 +13,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 
 /** First-stage Huion USB bridge. It deliberately does not change tablet state yet. */
 class HuionUsbController(private val context: Context) {
@@ -52,7 +53,12 @@ class HuionUsbController(private val context: Context) {
                 context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
             } else {
                 @Suppress("DEPRECATION")
-                context.registerReceiver(receiver, filter)
+                ContextCompat.registerReceiver(
+    context,
+    receiver,
+    filter,
+    ContextCompat.RECEIVER_NOT_EXPORTED
+)
             }
             registered = true
         }
