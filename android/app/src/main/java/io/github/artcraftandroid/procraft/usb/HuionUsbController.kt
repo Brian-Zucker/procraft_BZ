@@ -130,11 +130,26 @@ class HuionUsbController(private val context: Context) {
             requestPermission(device)
         }
     } else {
-        Toast.makeText(
-            context,
-            "Aucune HC16 détectée par ProCraft",
-            Toast.LENGTH_LONG
-        ).show()
+    val details = devices.joinToString(" | ") { device ->
+        "VID=%04X PID=%04X".format(
+            device.vendorId,
+            device.productId
+        )
+    }
+
+    val message = if (devices.isEmpty()) {
+        "Aucun périphérique USB visible par ProCraft"
+    } else {
+        "USB trouvés (${devices.size}) : $details"
+    }
+
+    Log.w(TAG, message)
+
+    Toast.makeText(
+        context,
+        message,
+        Toast.LENGTH_LONG
+    ).show()
     }
     }
 
