@@ -24,8 +24,8 @@ class HuionUsbController(private val context: Context) {
         private const val ACTION_PERMISSION =
             "io.github.artcraftandroid.procraft.HUION_USB_PERMISSION"
 
-        private const val HUION_VID = 0x256C
-        private const val HC16_PID = 0x0BBA
+        private const val HUION_VID = 0x3002
+        private const val HC16_PID = 0x0064
     }
 
     private val usbManager =
