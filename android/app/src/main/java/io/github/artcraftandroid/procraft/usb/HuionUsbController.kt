@@ -69,48 +69,73 @@ class HuionUsbController(private val context: Context) {
     }
 
     fun start() {
-        if (!registered) {
-            val filter = IntentFilter(ACTION_PERMISSION)
+    if (!registered) {
+        val filter = IntentFilter(ACTION_PERMISSION)
 
-            if (Build.VERSION.SDK_INT >= 33) {
-                context.registerReceiver(
-                    receiver,
-                    filter,
-                    Context.RECEIVER_NOT_EXPORTED
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                ContextCompat.registerReceiver(
-                    context,
-                    receiver,
-                    filter,
-                    ContextCompat.RECEIVER_NOT_EXPORTED
-                )
-            }
-
-            registered = true
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(
+                receiver,
+                filter,
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
         }
 
-        val device = usbManager.deviceList.values
-            .firstOrNull(::isHC16)
+        registered = true
+    }
 
-        if (device != null) {
-            Log.i(
-                TAG,
-                "HC16 detected: VID=%04X PID=%04X".format(
+    val devices = usbManager.deviceList.values
+
+    Log.i(TAG, "USB devices found: ${devices.size}")
+
+    devices.forEach { device ->
+        Log.i(
+            TAG,
+            "USB device: name=${device.deviceName}, " +
+                "manufacturer=${device.manufacturerName}, " +
+                "product=${device.productName}, " +
+                "VID=%04X PID=%04X".format(
                     device.vendorId,
                     device.productId
                 )
-            )
+        )
+    }
 
-            if (usbManager.hasPermission(device)) {
-                open(device)
-            } else {
-                requestPermission(device)
-            }
+    val device = devices.firstOrNull(::isHC16)
+
+    if (device != null) {
+        Toast.makeText(
+            context,
+            "HC16 trouvée : VID=%04X PID=%04X"
+                .format(device.vendorId, device.productId),
+            Toast.LENGTH_LONG
+        ).show()
+
+        if (usbManager.hasPermission(device)) {
+            Toast.makeText(
+                context,
+                "Autorisation HC16 déjà accordée",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            open(device)
         } else {
-            Log.i(TAG, "HC16 not found among connected USB devices")
+            requestPermission(device)
         }
+    } else {
+        Toast.makeText(
+            context,
+            "Aucune HC16 détectée par ProCraft",
+            Toast.LENGTH_LONG
+        ).show()
+    }
     }
 
     fun stop() {
